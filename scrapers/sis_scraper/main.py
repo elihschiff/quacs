@@ -131,12 +131,24 @@ async def get_class_information(class_url):
             timeslots = section_data["timeslots"] = []
 
             if time == None:
+                # Append an empty timeslot to make QuACS display the CRN
+                timeslots.append(
+                    {
+                        "days": [],
+                        "timeStart": -1,
+                        "timeEnd": -1,
+                        "instructor": "",
+                        "location": "",
+                        "dateStart": None,
+                        "dateEnd": None,
+                    }
+                )
                 continue
             for meeting in time.findAll("tr")[
                 1:
             ]:  # skip the first entry as its just the elabels
                 meeting_data = [x.text for x in meeting.findAll("td")]
-                timeStart, timeEnd = util.timeToMilitary(meeting_data[1])
+                timeStart, timeEnd = util.time_to_military(meeting_data[1])
                 days = list(meeting_data[2])
                 # Empty days comes up as '\xa0', so remove that if applicable
                 if len(days) > 0 and days[0] == "\xa0":
@@ -262,14 +274,17 @@ async def scrape_term(term):
     schools.append(
         {
             "name": "Uncategorized",
-            "depts": list(
-                {
-                    "code": code,
-                    "name": list(filter(lambda dept: dept["code"] == code, courses))[0][
-                        "name"
-                    ],
-                }
-                for code in unmatched_subjects
+            "depts": sorted(
+                (
+                    {
+                        "code": code,
+                        "name": list(
+                            filter(lambda dept: dept["code"] == code, courses)
+                        )[0]["name"],
+                    }
+                    for code in unmatched_subjects
+                ),
+                key=lambda x: x["code"],
             ),
         }
     )
@@ -280,7 +295,11 @@ async def scrape_term(term):
     # Replace all the dateStart/dateEnd with the MM/DD format used by the quacs frontend
     # Additionally, split out the prereq field into a separate json
     prerequisites = {}
-    date_to_quacs = lambda date: f"{str(date.month).zfill(2)}/{str(date.day).zfill(2)}"
+    date_to_quacs = (
+        lambda date: f"{str(date.month).zfill(2)}/{str(date.day).zfill(2)}"
+        if date != None
+        else ""
+    )
     for dept in courses:
         for course in dept["courses"]:
             for section in course["sections"]:
